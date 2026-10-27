@@ -1,178 +1,171 @@
-# GPU unlock 1.1.0
+# GPU Unlock — GA107 (RTX 3050/3050 Ti Mobile) Fork
 
-Unlock FP/BF16 instruction issue rate on consumer Nvidia 30 series cards to their professional equivalents
+Fork of [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock) with **GA107 chip support** added.
 
-This Linux kernel module combines the cmpunlocker's V67/PLM technique with the pre-driver timing of the UEFI approach. It runs the unlock, writes the speed selectors (SS0 `0x88888888`, which selects the full BF16 rate, and the 4-bit SS1 `0x8` IMLA4) and performs FLR before the unmodified NVIDIA driver binds the card. It is neither a UEFI application nor a patched NVIDIA driver. 
+The original module unlocks FP16/BF16 tensor core issue rate on GA102, GA103, GA104, and GA106 consumer cards. This fork extends it to **GA107** — the chip in RTX 3050 Mobile, RTX 3050 Ti Mobile, and RTX A500/A1000 Laptop GPUs.
 
-The benefit of this early kmod driver is that it does not require manual patching each time nvidia releases a new driver version.
+GA107 uses the same ga10x firmware family, SEC2 Booter, and speed selector registers as GA102–GA106. The only change is adding GA107 PCI device IDs to `recipes.c`.
 
-The effect of this unlock is that it doubles the instruction issuing speed of FP/BF16 FMA into FP32 operations on GA102, GA103, GA104 and GA106 cards.
+## Benchmark Results
 
-[3090 Ti dense 8192³ GEMM at 450 W, five-sample medians with FP32 accumulation](https://github.com/Zagitta/gpu-unlock/issues/1#issue-5905622687):
+RTX 3050 Mobile 4 GB (GA107, `10de:25a2`), dense 4096x4096 GEMM, YOLO11n training on COCO128 (100 images, 3 epochs):
 
-| Input | Before       | After         |
-| ----- | ------------ | ------------- |
-| FP16  | 87.46 TFLOPS | 118.39 TFLOPS |
-| BF16  | 87.50 TFLOPS | 157.41 TFLOPS |
-| TF32  | 42.58 TFLOPS | 82.61 TFLOPS  |
+| Test | Before | After | Change |
+|------|--------|-------|--------|
+| GEMM FP16 | 14.48 TFLOPS | 22.93 TFLOPS | **+58%** |
+| GEMM BF16 | 14.33 TFLOPS | 22.40 TFLOPS | **+56%** |
+| GEMM FP32 | 3.75 TFLOPS | 3.77 TFLOPS | ~0% |
+| Train FP16 | 40.42s | 30.26s | **-25%** |
+| Train FP32 | 44.40s | 42.18s | ~0% |
 
-## How to install
+FP32 is unaffected — the unlock only changes FP16/BF16 tensor core issue rate.
 
-First run:
+## Supported Cards
+
+All GA107 PCI device IDs are included (plus all original GA102–GA106 cards):
+
+- **RTX 3050 Mobile** (0x25a2, 0x25a5, 0x25ab, 0x25ac, 0x25e2, 0x25e5)
+- **RTX 3050 Ti Mobile** (0x25a0, 0x25a7)
+- **RTX 3050 6 GB** (0x25a6)
+- **RTX A500 / A1000 Laptop** (0x25b6, 0x25b8, 0x25b9, 0x25ba, 0x25bb, 0x25bc, 0x25bd, 0x25be, 0x25bf)
+- **T550 / T600 Laptop** (0x25a4, 0x25a9, 0x25aa, 0x25ad, 0x25af)
+- Others: 0x25e0, 0x25f9, 0x25fa, 0x25fb
+
+Check your device ID:
 
 ```sh
-git clone https://github.com/Zagitta/gpu-unlock
-cd gpu-unlock
+lspci -nn | grep -i nvidia
+# Example: 01:00.0 3D controller [0302]: NVIDIA Corporation GA107M [GeForce RTX 3050 Mobile] [10de:25a2]
+```
+
+## How to Install
+
+```sh
+git clone https://github.com/qwecvw/gpu-unlock-3050m-4gb
+cd gpu-unlock-3050m-4gb
 make install
 ```
 
-Then append `gpu_unlock.targets=all` to your kernel command line, keeping
-existing options:
-
-- **GRUB (Debian/Ubuntu/Mint):** add it inside `GRUB_CMDLINE_LINUX_DEFAULT`
-in `/etc/default/grub`, then run `sudo update-grub`.
-- **GRUB (Arch/CachyOS):** same edit, then run
-`sudo grub-mkconfig -o /boot/grub/grub.cfg`.
-- **Fedora/RHEL:** run
-`sudo grubby --update-kernel=ALL --args="gpu_unlock.targets=all"`.
-- **systemd-boot:** append it to the `options` line in your boot entry
-(`bootctl status` shows its location).
-- **UKI / generated entries:** add it to `/etc/kernel/cmdline` and regenerate
-your boot images/entries (e.g. `sudo mkinitcpio -P` for mkinitcpio UKIs).
-
-# FAQ
-
-- Q: Does this depend on a specific driver version? I see `610.43.03` is pinned.  
-A: No the driver is only fetched to extract firmware this unlock depends on    
-- Q: What about Windows?  
-A: I don't run windows and don't plan to maintain it but [https://github.com/impacifist/Windows-GPU-UNLOCK](https://github.com/impacifist/Windows-GPU-UNLOCK) has built a port, YMMV.    
-- Q: What about Turing and Ada?  
-A: There are forks with support already, I will integrate this soon.    
-- Q: Does this hurt my GPU?  
-A: It's very unlikely, this only unlocks a small handicap Nvidia has put in place to differentiate datacenter and professional cards from consumer versions. It may heat up your GPU slightly because it now does more compute but the standard throttling and power management remains completely intact and should downclock.    
-- Q: How can I assist?  
-A: Please consider [donating](#support-me) so I can purchase more GPUs <3
-
-## Local build
-
-Every build downloads the NVIDIA/CachyOS inputs over HTTPS and generates
-firmware only in the build directory and the binary package. All three formats install through the same `make install-*`
-targets. Packages are built from the working tree, uncommitted changes included.
-
-Build, install build dependencies, and install the packages in one step
-(asks for your sudo password):
+Add kernel boot parameter (use your PCI address from `lspci -D`):
 
 ```sh
-make install        # detect the distribution and select an installer
-make install-arch   # makepkg -sif
-make install-deb    # apt-get build-dep, dpkg-buildpackage, apt-get install
-make install-rpm    # dnf builddep, rpmbuild, dnf install
+# Edit /etc/default/grub — add inside GRUB_CMDLINE_LINUX_DEFAULT:
+gpu_unlock.targets=0000:01:00.0
+
+sudo update-grub
 ```
 
-`make install` uses `/etc/os-release` (`ID`, then `ID_LIKE`) to detect Arch,
-Debian/Ubuntu, or Fedora/RHEL/CentOS families. The RPM installer requires DNF.
-For other distributions, select a compatible explicit target above.
+Then **full power cycle** (see below).
 
-`make arch`, `make deb` and `make rpm` only build. Debian and RPM packages go
-to `build/deb` and `build/rpm`. The NVIDIA inputs are cached in
-`~/.cache/gpu-unlock/inputs` (`make inputs`; override with `INPUTS=`).
-`dpkg-buildpackage` itself never uses the network, so a clean-chroot build (sbuild or
-pbuilder) needs `GPU_UNLOCK_INPUTS` pointing at that cache.
-The `make dist` archive, the Debian source package and the `.nosrc.rpm`
-contain no NVIDIA archives or generated firmware.
+For other boot loaders and distros, see the [Boot flow and opt-in](#boot-flow-and-opt-in) section.
 
-## Boot flow and opt-in
+## Laptop-Specific: Full Power Cycle Required
 
-The packages put `gpu_unlock` and its firmware in the initramfs and load it
-there, before `nvidia` can bind a card:
+On laptops, the battery keeps the GPU powered even when shut down. A normal reboot does not fully reset the GPU, so the NVIDIA driver may overwrite the speed selectors before the unlock takes effect.
 
-- **mkinitcpio:** `/etc/mkinitcpio.conf.d/zz-gpu-unlock.conf` inserts
-`gpu_unlock` right before `nvidia` in `MODULES`, so a display card is blank
-for as short a time as possible. Without `nvidia` in the image, it goes
-last and still runs before an `nvidia` loaded from the root filesystem.
-Images are rebuilt on install. mkinitcpio ignores drop-ins for an image
-built with `-c <config>` or a preset `_config`; put `gpu_unlock` right
-before `nvidia` in that config's `MODULES` yourself.
-- **initramfs-tools:** `/usr/share/initramfs-tools/modules.d/gpu-unlock.conf`.
-- **dracut:** `/usr/lib/dracut/dracut.conf.d/gpu-unlock.conf`.
+**Required procedure after install or reboot:**
 
-With initramfs-tools and dracut, the module is built for every installed
-kernel that has headers, and those kernels' images are rebuilt on install
-and again on removal. Kernels installed later get the module and a new
-image from the kernel's own install hooks.
+1. Shut down the laptop
+2. Unplug the charger
+3. Hold the power button for 30 seconds (drains residual power from GPU)
+4. Wait 10 seconds
+5. Plug charger back in and power on
 
-There is no `softdep nvidia pre:` rule: kmod honours only the first
-`softdep nvidia` line it reads, so other packages' rules (`nvidia-utils`,
-`gddr6_hwmon`) would silently override it, or it would override theirs.
+Without this, the unlock will not apply. Desktops do not need this — a normal reboot is sufficient.
 
-The module does nothing unless the kernel command line opts in:
+## How Long Does It Last?
 
-```
-gpu_unlock.targets=all                          # every supported unbound card
-gpu_unlock.targets=0000:21:00.0                 # only these cards
-gpu_unlock.targets=0000:21:00.0,0000:22:00.0    # comma-separated
-```
+- **Until next power loss.** The unlock persists through the session.
+- **Reboot:** module re-applies at boot automatically. Laptops need another full power cycle.
+- **Suspend to RAM:** GPU powers off, module re-applies on resume.
+- **Hibernate:** not covered.
 
-Addresses are full PCI names as `lspci -D` prints them (hex digits in either
-case), independent of GPU numbering and display role. An entry that is not
-a supported recipe (GA100/GA102/GA103/GA104/GA106 or RTX 4090), including `all` mixed with addresses, is logged and ignored.
-The cards are unlocked concurrently, about a second in all however many
-there are, and each on its own: a card that is already bound or powered
-down is skipped. Bus mastering that the board firmware left on (Supermicro
-X11 does this whatever its option ROM and bus master settings) is cleared
-first; a card some driver already initialised is still refused. Then
-`nvidia` loads and binds every card as usual.
-
-The display card works too. Its firmware framebuffer (the boot console and
-Plymouth) keeps running while the unlock's firmware steps run, and is
-removed just before the card's reset, as `nvidia-drm` would do a moment
-later anyway. Its screen is blank from that reset until `nvidia-drm` takes
-over.
-
-Loading the module by hand after boot does nothing to a card that `nvidia`
-has bound.
-
-Suspend to RAM powers the cards off, which resets the speed selectors. After
-resume the module unlocks every card it unlocked at boot again, before
-`nvidia` resumes it: its suspend notifier runs just ahead of the one `nvidia`
-resumes its cards from (`NVreg_UseKernelSuspendNotifiers=1`, the default in
-current drivers; `nvidia-resume.service` runs later still). This adds about a
-second to resume. A card that kept power, as in suspend to idle, is still
-unlocked and is only read. A card that `nvidia` has already resumed, or that is
-bound to another driver, is left as it is, and the log says why. Add
-`gpu_unlock.resume=0` to the kernel command line, or write `0` to
-`/sys/module/gpu_unlock/parameters/resume`, to turn this off. Hibernation is
-not covered.
-
-Check the result with:
+## Verifying the Unlock
 
 ```sh
-journalctl -k -b | grep gpu_unlock
-lspci -nnk -s 0000:[ID]:00.0
+# Check module loaded and applied
+dmesg | grep gpu_unlock
+
+# Check kernel parameter is set
+cat /proc/cmdline | grep gpu_unlock
+
+# Quick GEMM test (requires PyTorch with CUDA)
+python3 -c "
+import torch, time
+a = torch.randn(4096, 4096, dtype=torch.float16, device='cuda')
+b = torch.randn(4096, 4096, dtype=torch.float16, device='cuda')
+torch.cuda.synchronize(); t = time.time()
+for _ in range(100): c = torch.mm(a, b)
+torch.cuda.synchronize()
+tflops = 2 * 4096**3 * 100 / (time.time() - t) / 1e12
+print(f'FP16 GEMM: {tflops:.1f} TFLOPS')
+print('Expected: ~14 locked, ~23 unlocked (RTX 3050M)')
+"
 ```
 
-To stop unlocking, remove `gpu_unlock.targets=` from the kernel command line;
-for a one-off boot, delete it in the bootloader's edit screen. Removing the
-packages also removes the module and the initramfs drop-ins.
+## What Changed From Upstream
 
-If the firmware on a card never stops, the module logs it and keeps the DMA
-buffers that firmware may still use until the next power off. Power off
-before trying again.
+Single file: `kernel/gpu_unlock/recipes.c`
 
-The kernel module and local packaging are GPL-2.0-only. The generated buffer
-derives from the pinned CMP reference; NVIDIA firmware remains under its own
-terms. See `firmware/NOTICE.md` and `licenses/` for attribution and notices.
+```c
+// Added GA107 macro (same ga10x family as GA102-GA106)
+#define GA107(id) { id, 0x177, &ga10x }
 
-# Support me
+// Added all GA107 PCI device IDs to cards[] array
+GA107(0x25a0), GA107(0x25a2), GA107(0x25a4), GA107(0x25a5),
+GA107(0x25a6), GA107(0x25a7), GA107(0x25a9), GA107(0x25aa),
+GA107(0x25ab), GA107(0x25ac), GA107(0x25ad), GA107(0x25af),
+GA107(0x25b6), GA107(0x25b8), GA107(0x25b9), GA107(0x25ba),
+GA107(0x25bb), GA107(0x25bc), GA107(0x25bd), GA107(0x25be),
+GA107(0x25bf), GA107(0x25e0), GA107(0x25e2), GA107(0x25e5),
+GA107(0x25f9), GA107(0x25fa), GA107(0x25fb),
+```
 
-Help me buy more GPUs <3
+**Why it works:** GA107 shares the same SEC2 Booter firmware, V67 signed payload, speed selector registers (SS0 at `0x0082381c`, SS1 at `0x00823820`), PLM register layout, and Falcon HWCFG signature (`0x80420100`) as the rest of the GA10x family.
 
-[Github Sponsor](https://github.com/sponsors/Zagitta)
+## Local Build
 
-[https://buymeacoffee.com/zagitta](https://buymeacoffee.com/zagitta) 
+```sh
+make install        # detect distro and build+install
+make install-arch   # Arch Linux
+make install-deb    # Debian/Ubuntu/Mint
+make install-rpm    # Fedora/RHEL
+```
 
-ETH: 0xf4eee937937f92038D70B16AbD7736D8a53a1c5c
+NVIDIA inputs cached in `~/.cache/gpu-unlock/inputs`.
 
-BTC: bc1qwpkwp70fn76z3s4kg2l9y3j4kst95twcznuugf
+## Boot Flow and Opt-in
 
-SOL: 8Rih6HY7V4LcdjYHz4iSffT4fTniqw5CACaBigSVxNYu
+The module loads from initramfs before the NVIDIA driver binds:
+
+- **initramfs-tools** (Debian/Ubuntu/Mint): `/usr/share/initramfs-tools/modules.d/gpu-unlock.conf`
+- **mkinitcpio** (Arch): `/etc/mkinitcpio.conf.d/zz-gpu-unlock.conf`
+- **dracut** (Fedora): `/usr/lib/dracut/dracut.conf.d/gpu-unlock.conf`
+
+Kernel command line options:
+
+```
+gpu_unlock.targets=all                          # every supported card
+gpu_unlock.targets=0000:01:00.0                 # specific card
+gpu_unlock.targets=0000:01:00.0,0000:02:00.0    # multiple cards
+gpu_unlock.resume=0                             # disable re-unlock on resume
+```
+
+## Uninstalling
+
+```sh
+cd gpu-unlock-3050m-4gb
+make uninstall
+```
+
+Remove `gpu_unlock.targets=...` from `/etc/default/grub` and run `sudo update-grub`.
+
+## Credits
+
+- [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock) — original module for GA102/GA103/GA104/GA106
+- [JustAResearcher/gpu-unlock-ada](https://github.com/JustAResearcher/gpu-unlock-ada) — Ada Lovelace (AD10x) fork
+- cmpunlocker — original V67/PLM technique
+
+## License
+
+GPL-2.0-only (same as upstream). NVIDIA firmware under its own terms — see `firmware/NOTICE.md`.

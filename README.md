@@ -9,6 +9,57 @@ community contributions.
 [![View compatibility and supported configurations](https://img.shields.io/badge/Compatibility-455A64?style=for-the-badge)](docs/COMPATIBILITY.en.md)
 [![Contribute research and improvements](https://img.shields.io/badge/Contribute-37474F?style=for-the-badge&logo=github&logoColor=white)](docs/CONTRIBUTING.en.md)
 
+## Branch `ga107-m6500qc-port`: RTX 3050 Laptop (GA107) port — status
+
+> This branch ports the manual USB route (`unlock/`) to an **RTX 3050 Laptop 4GB
+> (GA107, `10de:25a2`) in an ASUS Vivobook M6500QC** (Ryzen 5000H, AMD iGPU drives
+> the panel, Optimus). It is experimental and **not a working Windows unlock yet**.
+
+**Current result (2026-10-27):** the UEFI transaction succeeds on hardware, but the
+unlock is **not present by the time Windows runs a workload**.
+
+| Step | Result |
+|---|---|
+| Read-only preflight ×3 (`RUN00`–`RUN02`) | All checks pass with the GA107 profile; PROM hash, chip, VRAM, display path confirmed |
+| Write run (`entryLatchedSs1Full`, manual U) | `transaction result=0`, `clean=1`, one FLR; post-FLR `SS0=0x88888888 SS1=0x8` |
+| Windows GEMM before (stock) | FP16 12.51 / BF16 12.80 / FP32 3.05 TFLOPS |
+| Windows GEMM after the write run | FP16 12.46 / BF16 12.80 / FP32 3.00 TFLOPS — **unchanged** |
+| Linux (same laptop, `gpu-unlock` kernel module) | FP16 14.48 → 22.93 TFLOPS — works |
+
+**Open problem.** The selectors are written correctly in UEFI but are back to stock
+when the benchmark runs in Windows. On this Optimus laptop Windows keeps the idle
+dGPU in D3 (`DEVPKEY_Device_PowerData` reports D3 at idle); the working hypothesis is
+that dGPU power management between the UEFI handoff and the first workload resets the
+selectors. This has **not** been verified, and no workaround is part of this branch.
+The Linux module is unaffected because it applies the unlock after boot and again on resume.
+
+**What changed vs upstream `e4f988f`:**
+
+- `unlock/port.h`: profile `GU_PROFILE_GA107_M6500QC` (all values from the captures),
+  family switch `GU_EXPERIMENTAL_3050`, `GU_TARGET_DECODE_OFF`; the 3090 default is unchanged.
+- `unlock/app.c`: profile macros instead of 3090 literals; memory decode enabled through
+  `PciIo` before the first config snapshot (the firmware leaves the dGPU command register
+  at 0) and restored on exit; preflight logs the PROM hash and GOP device paths.
+- `unlock/checks.c`, `unlock/app_io.c`, `unlock/build.ps1` (`-Profile ga107-m6500qc`),
+  `internal-boot/boot/probe.c` (read-only deep capture allowed for `25a2`).
+- Key GA107 findings: class `0x0302` (3D controller), BAR0 `0xfb000000`, BOOT0 `0xb77000a1`,
+  VRAM `0x1000` MiB, panel ADR `0x80010400`, **cold SS0 varies between boots**
+  (`0x52600052` / `0x52600152`), so only `entryLatchedSs1Full` is usable.
+
+Build (Windows, LLVM 20.1.8):
+
+```powershell
+.\unlock\build.ps1 -Clang "C:\Program Files\LLVM\bin\clang.exe" -LldLink "C:\Program Files\LLVM\bin\lld-link.exe" -Profile ga107-m6500qc
+.\unlock\build.ps1 -Clang "C:\Program Files\LLVM\bin\clang.exe" -LldLink "C:\Program Files\LLVM\bin\lld-link.exe" -Profile ga107-m6500qc -ExperimentalUnlock -StockProfile entryLatchedSs1Full
+```
+
+Not done: host mock tests (`unlock/test-all.ps1`), the `internal-boot/` route. Firmware
+assets are not included (see [docs/ASSETS.en.md](docs/ASSETS.en.md)). Details, all
+captured values and the investigation history:
+[docs/GA107-M6500QC-HANDOFF.md](docs/GA107-M6500QC-HANDOFF.md) · logs:
+[evidence/ga107-m6500qc-usb/](evidence/ga107-m6500qc-usb/) · benchmark:
+[benchmark/bench_gemm.py](benchmark/bench_gemm.py).
+
 ## Community
 
 Join our [Discord community](https://discord.gg/WjKsjEqxF) for conversations,

@@ -174,7 +174,7 @@ int GuDisplayPath(const EFI_DEVICE_PATH_PROTOCOL *Path, UINTN MaxBytes) {
   if (Route == 1) {
     if (NodeLength(Bytes, MaxBytes) != sizeof(ACPI_ADR_DEVICE_PATH) ||
         Bytes[0] != ACPI_DEVICE_PATH || Bytes[1] != ACPI_ADR_DP ||
-        Read32(Bytes + 4) != 0x80010300U) return 0;
+        Read32(Bytes + 4) != GU_AMD_GOP_ADR) return 0;
     Bytes += sizeof(ACPI_ADR_DEVICE_PATH);
     MaxBytes -= sizeof(ACPI_ADR_DEVICE_PATH);
     if (NodeLength(Bytes, MaxBytes) != 4 || Bytes[0] != END_DEVICE_PATH_TYPE ||

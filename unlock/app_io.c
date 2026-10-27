@@ -71,7 +71,7 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
   status=Table->BootServices->HandleProtocol(loaded->DeviceHandle,&FsGuid,(VOID **)&fs);
   if(EFI_ERROR(status) || !fs)return EFI_UNSUPPORTED;
   status=fs->OpenVolume(fs,&Root);if(EFI_ERROR(status) || !Root)return EFI_DEVICE_ERROR;
-#if defined(GU_EXPERIMENTAL_3090)
+#if defined(GU_EXPERIMENTAL_UNLOCK)
   status=Root->Open(Root,&Parent,L"\\RTX3090-UNLOCK",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
 #else
   status=Root->Open(Root,&Parent,L"\\RTX3090-PREFLIGHT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
@@ -94,10 +94,10 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
     if(status!=EFI_NOT_FOUND)return status;
     status=Run->Open(Run,&Report,L"REPORT.TXT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,0);
     if(EFI_ERROR(status) || !Report)return EFI_DEVICE_ERROR;
-#if defined(GU_EXPERIMENTAL_3090)
-    GuLog("RTX3090 AMD EXPERIMENTAL MANUAL UNLOCK\nRUN%02u\nManual U starts one hardware transaction; Esc or timeout cancels. Hardware success unverified.\n",(unsigned)slot);
+#if defined(GU_EXPERIMENTAL_UNLOCK)
+    GuLog("%s AMD EXPERIMENTAL MANUAL UNLOCK\nRUN%02u\nManual U starts one hardware transaction; Esc or timeout cancels. Hardware success unverified.\n",GU_PROFILE_LABEL,(unsigned)slot);
 #else
-    GuLog("RTX3090 AMD read-only cold-state preflight\nRUN%02u\nCannot arm: GPU writes, DMA, reset and driver release are blocked.\n",(unsigned)slot);
+    GuLog("%s AMD read-only cold-state preflight\nRUN%02u\nCannot arm: GPU writes, DMA, reset and driver release are blocked.\n",GU_PROFILE_LABEL,(unsigned)slot);
 #endif
     return GuLogReady()?EFI_SUCCESS:EFI_DEVICE_ERROR;
   }

@@ -1,0 +1,47 @@
+RTX3050M 4GB GA107 / ASUS M6500QC AMD read-only cold-state preflight
+RUN02
+Cannot arm: GPU writes, DMA, reset and driver release are blocked.
+CHECK stage=secure-boot status=0
+CHECK stage=watchdog status=0
+PCI enumeration: status=0 handles=32
+PCI target matches=1 status=0
+target decode intent: status=0 command=0 supported=0x1b763 attributes=0
+target decode enabled: status=0 command=0x2
+target location: status=0
+config[00]=25a210de 00100002 030200a1 00000010
+config[10]=fb000000 0000000c 000000fe 0000000c
+config[20]=000000ff 0000e001 00000000 11d31043
+config[30]=fc000000 00000060 00000000 000001ff
+config[40]=11d31043 00000000 00000000 00000000
+config[50]=00000000 00000001 0023d6ce 00000000
+config[60]=48036801 00000008 00807805 00000000
+config[70]=00000000 00000000 0012b410 112c8de1
+config[80]=00002930 00454d04 10830040 00000000
+config[90]=00000000 00000000 00000000 00070813
+config[a0]=00000000 0180001e 001f0004 00000000
+config[b0]=00000000 01140009 00000000 00000000
+config[c0]=00000000 00000000 00050011 00b90000
+config[d0]=00ba0000 00000000 00000000 00000000
+config[e0]=00000000 00000000 00000000 00000000
+config[f0]=00000000 00000000 00000000 00000000
+target BDF=0:1:0.0 checks=1 pm=0x60 pcie=0x78 msi=0x68 msix=0
+CHECK stage=target status=0
+GOP enumeration: status=0 handles=1
+GOP[0] path bytes=02010c00d041030a0000000001010600010801010600000002030800000401807fff0400
+GOP[0] path_status=0 route=1 framebuffer=0xff10000000 bytes=8294400 mode=0 max_mode=9 info_bytes=36 console=0
+GOP[0] format=1 size=1920x1080 stride=1920
+AMD GOP PCI parent: status=0 id=0x16381002 subsystem=0x11d31043
+GOP result: valid=1 amd_physical=1
+CHECK stage=display status=0
+bar0 query: status=0
+bar0 descriptor: type=0 granularity=32 min=0xfb000000 max=0xfbffffff length=0x1000000 translation=0
+CHECK stage=bar0 status=0
+live PROM sha256=89d4d78bcae54c007d1410bcd0747a5f0c161940b352543fcd931a0dad96a675
+live PROM head=55 aa 7f eb 4b 37 34 30
+live PROM hash matched=1
+CHECK stage=prom status=0
+cold state: chip=0xb77000a1 plm=0xffffff8f gfw=0x8b8f/0x3ff/0x10 WPR2_HI=0 SS0=0x52600152 SS1=0x6
+DIAGNOSTIC PREFLIGHT ONLY: chip baseline=UNKNOWN SS0 baseline=UNKNOWN memory=0x1000 expected=0x1000; cannot arm; no GPU writes/reset/DMA/driver release
+CHECK stage=diagnostic-cold-state status=0x8000000000000006
+target decode restore: status=0 read=0 command=0
+FINAL status=0x8000000000000006 stage=diagnostic-cold-state attempted=0 driver_release=0 clean=1

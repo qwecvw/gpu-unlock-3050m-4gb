@@ -156,7 +156,8 @@ static VOID DumpProm(CAPTURE *c,EFI_FILE_PROTOCOL *root,UINT8 *page) {
  * All allocation/protocol calls finish before the final identity/config recheck. */
 static BOOLEAN ProbeEnvelope(CAPTURE *c,EFI_PCI_IO_PROTOCOL *io,const UINT32 *cfg) {
 #ifdef GU_PROBE_GENERIC
-  BOOLEAN identity=cfg[0]==0x220410deU || cfg[0]==0x220310deU;
+  /* 0x25a210de: RTX 3050 Laptop (GA107), read-only capture for the GA107 port. */
+  BOOLEAN identity=cfg[0]==0x220410deU || cfg[0]==0x220310deU || cfg[0]==0x25a210deU;
 #else
   BOOLEAN identity=cfg[0]==GU_BOARD_ID && cfg[11]==GU_BOARD_SUBSYSTEM;
 #ifdef GU_BAR0_BASE
